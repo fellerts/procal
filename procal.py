@@ -262,16 +262,25 @@ class ResultField(QtWidgets.QLabel):
     def __init__(self):
         QtWidgets.QLabel.__init__(self)
         self.setAlignment(QtCore.Qt.AlignRight)
-        
+        self._signed = False
+        self._result = 0
         # allow user to select text
         self.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
 
+    def toggle_signed(self, result):
+        self._signed = not self._signed
+        self.set_result(self._result)
+
     def set_result(self, result):
-        
+        self._result = result
         if type(result) == str:
             self.setText(f'{result}')
         else:
-            self.setText(f'0b{result:b} = {result} = 0x{result:x}')
+            if self._signed and (result & (1 << 31)):
+                negated_result = (result ^ 0xffffffff) + 1
+                self.setText(f'0b{result:b} = -{negated_result} = 0x{result:x}')
+            else:
+                self.setText(f'0b{result:b} = {result} = 0x{result:x}')
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -286,6 +295,7 @@ class MainWindow(QtWidgets.QMainWindow):
         binary_view = BinaryView()
         binary_result = ResultField()
         reset_button = QtWidgets.QPushButton('Clear')
+        complement_checkbox = QtWidgets.QCheckBox('Two\'s complement')
 
         # connect input field valid result to binary view update
         input_field.connect(binary_view.set_value)
@@ -295,13 +305,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # connect reset button to input field reset
         reset_button.clicked.connect(input_field.reset)
+        
+        # connect Two's complement checkbox to update signedness in binary_result
+        complement_checkbox.toggled.connect(binary_result.toggle_signed)
 
         # arrange items inside layout
         layout.addWidget(reset_button, 0, 0)
         layout.addWidget(input_field, 0, 1)
         layout.addWidget(binary_view, 1, 0, 1, 2)
         layout.addWidget(binary_result, 2, 0, 1, 2)
-
+        layout.addWidget(complement_checkbox, 3, 0)
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
         
