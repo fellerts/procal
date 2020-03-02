@@ -9,6 +9,14 @@ def twos_complement(onesComplement, nBits):
     else: 
         return ((~onesComplement + 1) & ((1 << nBits) - 1)) * -1
 
+def is_valid_input(string):
+    try:
+        # try evaluating result
+        int(eval(string))
+        return True
+    except (SyntaxError, Exception):
+        return False
+
 
 class BinaryTableItem(QtWidgets.QTableWidgetItem):
     '''
@@ -165,7 +173,6 @@ class BinaryView(QtWidgets.QTableWidget):
                 digit_index += 1
 
     def get_value(self):
-
         val = 0
         for item in self.table_elements:
             if item.value:
@@ -181,7 +188,7 @@ class BinaryView(QtWidgets.QTableWidget):
         # propagate value
         self._callback(value)
         
-        # abort if we cannot display it
+        # sanity check: abort if we cannot display it
         if type(value) != int or value >= 2**32:
             return
             
@@ -240,8 +247,6 @@ class BinaryView(QtWidgets.QTableWidget):
         if item == self.previously_clicked_cell:
             return
             
-        print(f'item at index {item.index} entered')
-
         # user entered cell with mouse button down, update item state
         item.notify_entered_while_pressed()
         val = self.get_value()
@@ -271,7 +276,7 @@ class BinaryView(QtWidgets.QTableWidget):
 class InputLabel(QtWidgets.QLineEdit):
     '''
         Class inheriting QLineEdit for taking user input and evaluating 
-        it as python code
+        it as python code, propagating the result if it can be cast to int
     '''
     def __init__(self):
         QtWidgets.QLineEdit.__init__(self)
@@ -305,9 +310,7 @@ class InputLabel(QtWidgets.QLineEdit):
                 self._callback(res)
         
         # int() cast will fail is result is not integer, report "syntax error"
-        except SyntaxError:
-            self._callback('Syntax error')
-        except Exception:
+        except (SyntaxError, Exception):
             self._callback('Syntax error')
 
         self.setFocus()
@@ -320,7 +323,6 @@ class ResultField(QtWidgets.QLabel):
     def __init__(self):
         QtWidgets.QLabel.__init__(self)
         self.setAlignment(QtCore.Qt.AlignRight)
-        self.oneliner = True
         self.result = ""
         
         # allow user to select text
@@ -331,6 +333,7 @@ class ResultField(QtWidgets.QLabel):
         self.result = result
         
         if type(result) == str:
+            # display string results immediately
             self.setText(f'{result}')
         else:
             if is_signed:
@@ -338,40 +341,14 @@ class ResultField(QtWidgets.QLabel):
                 self.setText(f'0b{result:b} = {as_signed} = 0x{result:x}')
             else:
                 self.setText(f'0b{result:b} = {result} = 0x{result:x}')
-            
-    def expand(self):
-        self.oneliner = True
         
-        # update result to trigger new view
-        self.set_result(self.result)
-        
-    def contract(self):
-        self.oneliner = False
-        
-        # update result to trigger new view
-        self.set_result(self.result)
-        
-class ExpandLabel(QtWidgets.QLabel):
-    def __init__(self, on_clicked):
-        QtWidgets.QLabel.__init__(self)
-        self.setText(' >')
-        self.on_clicked = on_clicked
-    
-    def mousePressEvent(self, event):
-        if self.text() == ' >':
-            self.setText(' v')
-        else:
-            self.setText(' >')
-        self.on_clicked()
-    
-
-
 class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
         super().__init__()
         self.central_widget = QtWidgets.QWidget()
         
+        # make layouts to contain widgets
         self.layout = QtWidgets.QVBoxLayout()
         self.inputLayout = QtWidgets.QHBoxLayout()
         self.resultLayout = QtWidgets.QHBoxLayout()
@@ -379,25 +356,27 @@ class MainWindow(QtWidgets.QMainWindow):
         # create fields
         self.input_field = InputLabel()
         binary_view = BinaryView()
-        self.binary_result = ResultField()
+        binary_result = ResultField()
         reset_button = QtWidgets.QPushButton('Clear')
         
         # connect input field valid result to binary view update
         self.input_field.connect(binary_view.set_value)
 
         # connect binary view update to binary result label
-        binary_view.connect(self.binary_result.set_result)
+        binary_view.connect(binary_result.set_result)
 
         # connect reset button to input field reset
         reset_button.clicked.connect(self.input_field.reset)
         
+        # place widgets in layouts
         self.inputLayout.addWidget(reset_button)
         self.inputLayout.addWidget(self.input_field)
-        self.resultLayout.addWidget(self.binary_result)
+        self.resultLayout.addWidget(binary_result)
         self.layout.addLayout(self.inputLayout)
         self.layout.addWidget(binary_view)
         self.layout.addLayout(self.resultLayout)
-
+        
+        # add layout to the central widget
         self.central_widget.setLayout(self.layout)
         self.setCentralWidget(self.central_widget)
         
@@ -406,12 +385,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_field.reset()
         self.input_field.setFocus()
         self.input_field.selectAll()
-
+        
+        # don't allow resizing of window
         self.setFixedSize(self.central_widget.sizeHint())
-
+        
+        # create timer for polling xsel to get selected text
         self.timer = QtCore.QTimer()
         self.timer.setInterval(50)
         self.timer.timeout.connect(self.poll_selected_text)
+        self.previously_selected_text = None
         
         self.installEventFilter(self)
         
@@ -420,15 +402,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if event.type() == QtCore.QEvent.WindowDeactivate:
             # start selection polling timer when window loses focus
             self.timer.start()
-            
-            try:
-                self.prev = subprocess.check_output('xsel', timeout=1).decode()
-            except FileNotFoundError:
-                # guard against xsel not being installed
-                self.timer.stop()
-            except subprocess.TimeoutExpired:
-                # xsel timed out, happens when currently selected text is inside procal.. ignore
-                pass
             
         elif event.type() == QtCore.QEvent.WindowActivate:
             # stop selection polling timer when window gains focus
@@ -440,23 +413,30 @@ class MainWindow(QtWidgets.QMainWindow):
         
         try:
             currently_selected = subprocess.check_output('xsel', timeout=1).decode()
+        except FileNotFoundError:
+            # guard against xsel not being installed
+            self.timer.stop()
+            return
         except subprocess.TimeoutExpired:
-            # sometimes xsel hangs, ignore
+            # sometimes xsel hangs -- can happen when selected text is inside procal
             return
         
         # ignore multi-line selections
         if '\n' in currently_selected or '\r' in currently_selected:
-            print("multi-line")
             return
             
-        # ignore short selections
-        if len(currently_selected) < 1:
+        # ignore zero-length selections
+        if len(currently_selected) == 0:
             return
-        
+            
+        # validate currently selected text
+        if not is_valid_input(currently_selected):
+            return
+            
         # make sure current selection differs from previously selected text
-        if currently_selected != self.prev:
+        if currently_selected != self.previously_selected_text:
             self.input_field.force_to(currently_selected)
-            self.prev = currently_selected
+            self.previously_selected_text = currently_selected
 
 if __name__ == "__main__":
     # boilerplate for starting Qt applications
