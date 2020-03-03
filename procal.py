@@ -111,18 +111,23 @@ class BinaryView(QtWidgets.QTableWidget):
         self.callbacks = []
         self.table_elements = []
         
+        self.width = 16
+        self.spacers = int(self.width / 8 - 1)
+        self.n_cols = self.width + self.spacers
+        
         self.init_table_properties()
         self.populate_table()
         
         self.previously_clicked_cell = None
-
+        
+        
     def init_table_properties(self):
         
         # we need four rows (2 rows of bits, 2 rows of labels)
         self.setRowCount(4)
         
         # we need 17 columns (16 columns of bits, one spacer column)
-        self.setColumnCount(17)
+        self.setColumnCount(self.n_cols)
         self.horizontalHeader().setMaximumSectionSize(25)
         
         # register callback for mouse event (cell entered while mouse pressed)
@@ -142,33 +147,40 @@ class BinaryView(QtWidgets.QTableWidget):
         
         # brute-force way of populating the table with clickable bits, labels and spacers
         digit_index = 0
-        for col in range(17):
-            if col == 8:
-                self.setItem(2, col, BinaryTableSpacer())
-                self.setItem(3, col, BinaryTableSpacer())
+        for col in range(self.n_cols):
+            
+            reverse_index = self.n_cols - 1 - col
+            
+            if col == 8 or col == 17 or col == 26:
+                self.setItem(2, reverse_index, BinaryTableSpacer())
+                self.setItem(3, reverse_index, BinaryTableSpacer())
+                print(f'col {col} is spacer')
             else:
-
                 item = BinaryTableItem(digit_index)
                 self.table_elements.append(item)
-                self.setItem(3, 16 - col, item)
+                self.setItem(3, reverse_index, item)
 
                 item = BinaryTableLegend(digit_index)
-                self.setItem(2, 16 - col, item)
+                self.setItem(2, reverse_index, item)
 
+                print(f'col {col} has index {digit_index}, true col {reverse_index}')
                 digit_index += 1
 
-        for col in range(17):
-            if col == 8:
-                self.setItem(0, col, BinaryTableSpacer())
-                self.setItem(1, col, BinaryTableSpacer())
+        for col in range(self.n_cols):
+
+            reverse_index = self.n_cols - 1 - col
+
+            if col == 8 or col == 17 or col == 26:
+                self.setItem(0, reverse_index, BinaryTableSpacer())
+                self.setItem(1, reverse_index, BinaryTableSpacer())
             else:
 
                 item = BinaryTableItem(digit_index)
                 self.table_elements.append(item)
-                self.setItem(1, 16 - col, item)
+                self.setItem(1, reverse_index, item)
 
                 item = BinaryTableLegend(digit_index)
-                self.setItem(0, 16 - col, item)
+                self.setItem(0, reverse_index, item)
 
                 digit_index += 1
 
