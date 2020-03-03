@@ -190,15 +190,14 @@ class BinaryView(QtWidgets.QTableWidget):
             if item.value:
                 val += (1 << item.index)
         return val
-
+        
     def set_value(self, value):
+        
+        print(f'set value {value}')
         
         # reset bit limits (if previous val was neg)
         for bit in self.table_elements:
             bit.set_is_bit_limit(False)
-        
-        # propagate value
-        self._callback(value)
         
         # sanity check: abort if we cannot display it
         if type(value) != int or value >= 2**32:
@@ -213,6 +212,9 @@ class BinaryView(QtWidgets.QTableWidget):
                 self.table_elements[bit].force_to(True)
             else:
                 self.table_elements[bit].force_to(False)
+        
+        as_unsigned = self.get_value()        
+        self._callback(as_unsigned)
 
     def connect(self, callback):
         self.callbacks.append(callback)
@@ -350,8 +352,10 @@ class ResultField(QtWidgets.QLabel):
         else:
             if is_signed:
                 as_signed = twos_complement(result, bit_depth)
+                print(f'signed: reuslt {result} as_signed {as_signed}')
                 self.setText(f'0b{result:b} = {as_signed} = 0x{result:x}')
             else:
+                print(f'not signed: reuslt {result}')
                 self.setText(f'0b{result:b} = {result} = 0x{result:x}')
         
 class MainWindow(QtWidgets.QMainWindow):
