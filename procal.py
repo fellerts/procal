@@ -6,7 +6,7 @@ import subprocess
 def twos_complement(onesComplement, nBits):
     if onesComplement & 1 << (nBits - 1) == 0:
         return onesComplement
-    else: 
+    else:
         return ((~onesComplement + 1) & ((1 << nBits) - 1)) * -1
 
 def is_valid_input(string):
@@ -53,11 +53,11 @@ class BinaryTableItem(QtWidgets.QTableWidgetItem):
     def set_is_bit_limit(self, is_bit_limit):
         self.is_bit_limit = is_bit_limit
         self._update_color()
-        
+
     def toggle_is_bit_limit(self):
         self.is_bit_limit = not self.is_bit_limit
         self._update_color()
-            
+
     def _toggle(self):
         self.value = not self.value
         self.setText(f'{self.value:b}')
@@ -70,7 +70,7 @@ class BinaryTableItem(QtWidgets.QTableWidgetItem):
             self.setBackground(QtGui.QColor(240, 200, 200))
         else:
             self.setBackground(QtGui.QColor(255, 255, 255))
-            
+
     def force_to(self, value):
         self.value = value
         self.setText(f'{self.value:b}')
@@ -91,7 +91,7 @@ class BinaryTableLegend(QtWidgets.QTableWidgetItem):
 
 class BinaryTableSpacer(QtWidgets.QTableWidgetItem):
     '''
-        Empty non-clickable table element for BinaryView 
+        Empty non-clickable table element for BinaryView
     '''
     def __init__(self):
         QtWidgets.QTableWidgetItem.__init__(self)
@@ -109,35 +109,35 @@ class BinaryView(QtWidgets.QTableWidget):
 
         self.callbacks = []
         self.table_elements = []
-        
+
         if n_bits not in [32, 64]:
             print("invalid number of bits requested, choose from 32, 64")
             return
-        
+
         self.n_bits = n_bits
-        
+
         # helper variables for constructing table
         self.width = int(n_bits / 2)
         self.n_spacers = int(self.width / 8 - 1)
         self.n_cols = self.width + self.n_spacers
-        
+
         self.init_table_properties()
         self.populate_table()
-        
+
         self.previously_clicked_cell = None
-        
+
     def init_table_properties(self):
-        
+
         # we need four rows (2 rows of bits, 2 rows of labels)
         self.setRowCount(4)
-        
+
         # we need 17 columns (16 columns of bits, one spacer column)
         self.setColumnCount(self.n_cols)
         self.horizontalHeader().setMaximumSectionSize(25)
-        
+
         # register callback for mouse event (cell entered while mouse pressed)
         self.itemEntered.connect(self.on_item_entered)
-        
+
         # set table visual properties
         self.horizontalHeader().setVisible(False)
         self.verticalHeader().setVisible(False)
@@ -149,13 +149,13 @@ class BinaryView(QtWidgets.QTableWidget):
         self.resizeColumnsToContents()
 
     def populate_table(self):
-        
+
         # brute-force way of populating the table with clickable bits, labels and spacers
         digit_index = 0
         for col in range(self.n_cols):
-            
+
             reverse_index = self.n_cols - 1 - col
-            
+
             if col == 8 or col == 17 or col == 26:
                 self.setItem(2, reverse_index, BinaryTableSpacer())
                 self.setItem(3, reverse_index, BinaryTableSpacer())
@@ -193,35 +193,35 @@ class BinaryView(QtWidgets.QTableWidget):
             if item.value:
                 val += (1 << item.index)
         return val
-        
+
     def set_value(self, value):
-        
+
         # reset bit limits (if previous val was neg)
         for bit in self.table_elements:
             bit.set_is_bit_limit(False)
-        
+
         # sanity check: abort if we cannot display it
         if type(value) != int or value >= 2**self.n_bits:
             return
-            
+
         if value < 0:
             self.table_elements[-1].set_is_bit_limit(True)
-            
+
         # upadte bit field to match value
         for bit in range(self.n_bits):
             if (1 << bit) & value:
                 self.table_elements[bit].force_to(True)
             else:
                 self.table_elements[bit].force_to(False)
-        
-        as_unsigned = self.get_value()        
+
+        as_unsigned = self.get_value()
         self._callback(as_unsigned)
 
     def connect(self, callback):
         self.callbacks.append(callback)
-        
+
     def set_new_bit_limit_cell(self, new_cell):
-        
+
         # update all bits
         for bit in self.table_elements:
             if bit == new_cell:
@@ -231,19 +231,19 @@ class BinaryView(QtWidgets.QTableWidget):
             else:
                 # tell all the other bits that they are not bit limit
                 bit.set_is_bit_limit(False)
-                
+
         # user clicked but has not yet released in item
         val = self.get_value()
         self._callback(val)
-        
+
     def mousePressEvent(self, event):
         # using mousePressEvent instead of itemClicked so we can differentiate right/left clicks
         cell = self.itemAt(event.pos())
-        
+
         if not isinstance(cell, BinaryTableItem):
             # ignore clicks in spacer and legend cells
             return
-            
+
         if event.button() == QtCore.Qt.LeftButton:
             cell._toggle()
             self.previously_clicked_cell = cell
@@ -252,38 +252,38 @@ class BinaryView(QtWidgets.QTableWidget):
         elif event.button() == QtCore.Qt.RightButton:
             self.previously_clicked_cell = cell
             self.set_new_bit_limit_cell(cell)
-        
+
     def on_item_entered(self, item):
-        
+
         if not isinstance(item, BinaryTableItem):
             return
-            
+
         # avoid double-toggling
         if item == self.previously_clicked_cell:
             return
-            
+
         # user entered cell with mouse button down, update item state
         item.notify_entered_while_pressed()
         val = self.get_value()
         self._callback(val)
 
-        
+
     def get_current_bit_limit(self):
         limit = None
-        
+
         for bit in self.table_elements:
             if bit.is_bit_limit:
                 limit = bit.index + 1
-        
+
         return limit
-        
+
     def get_max_n_bits(self):
         return self.n_bits
 
     def _callback(self, value):
-        
+
         bit_limit = self.get_current_bit_limit()
-        
+
         for cb in self.callbacks:
             if bit_limit is not None:
                 cb(value, True, bit_limit)
@@ -293,7 +293,7 @@ class BinaryView(QtWidgets.QTableWidget):
 
 class InputLabel(QtWidgets.QLineEdit):
     '''
-        Class inheriting QLineEdit for taking user input and evaluating 
+        Class inheriting QLineEdit for taking user input and evaluating
         it as python code, propagating the result if it can be cast to int
     '''
     def __init__(self, n_bits):
@@ -309,7 +309,7 @@ class InputLabel(QtWidgets.QLineEdit):
     def reset(self):
         self.setText('0')
         self._callback(0)
-        
+
     def force_to(self, value):
         self.setText(value)
         self._on_changed()
@@ -327,7 +327,7 @@ class InputLabel(QtWidgets.QLineEdit):
                 self._callback(f'Out of {self.n_bits} bit range')
             else:
                 self._callback(res)
-        
+
         # int() cast will fail is result is not integer, report "syntax error"
         except (SyntaxError, Exception):
             self._callback('Syntax error')
@@ -343,14 +343,14 @@ class ResultField(QtWidgets.QLabel):
         QtWidgets.QLabel.__init__(self)
         self.setAlignment(QtCore.Qt.AlignRight)
         self.result = ""
-        
+
         # allow user to select text
         self.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
 
     def set_result(self, result, is_signed=False, bit_depth=None):
-        
+
         self.result = result
-        
+
         if type(result) == str:
             # display string results immediately
             self.setText(f'{result}')
@@ -360,24 +360,24 @@ class ResultField(QtWidgets.QLabel):
                 self.setText(f'0b{result:b} = {as_signed} = 0x{result:x}')
             else:
                 self.setText(f'0b{result:b} = {result} = 0x{result:x}')
-        
+
 class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
         super().__init__()
         self.central_widget = QtWidgets.QWidget()
-        
+
         # make layouts to contain widgets
         self.layout = QtWidgets.QVBoxLayout()
         self.inputLayout = QtWidgets.QHBoxLayout()
         self.resultLayout = QtWidgets.QHBoxLayout()
-        
+
         # create fields
         self.input_field = InputLabel(32)
         binary_view = BinaryView(32)
         binary_result = ResultField()
         reset_button = QtWidgets.QPushButton('Clear')
-        
+
         # connect input field valid result to binary view update
         self.input_field.connect(binary_view.set_value)
 
@@ -386,7 +386,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # connect reset button to input field reset
         reset_button.clicked.connect(self.input_field.reset)
-        
+
         # place widgets in layouts
         self.inputLayout.addWidget(reset_button)
         self.inputLayout.addWidget(self.input_field)
@@ -394,42 +394,42 @@ class MainWindow(QtWidgets.QMainWindow):
         self.layout.addLayout(self.inputLayout)
         self.layout.addWidget(binary_view)
         self.layout.addLayout(self.resultLayout)
-        
+
         # add layout to the central widget
         self.central_widget.setLayout(self.layout)
         self.setCentralWidget(self.central_widget)
-        
-        # initialize input field, this cascades to the binary view 
+
+        # initialize input field, this cascades to the binary view
         # and reset_button
         self.input_field.reset()
         self.input_field.setFocus()
         self.input_field.selectAll()
-        
+
         # don't allow resizing of window
         self.setFixedSize(self.central_widget.sizeHint())
-        
+
         # create timer for polling xsel to get selected text
         self.timer = QtCore.QTimer()
         self.timer.setInterval(50)
         self.timer.timeout.connect(self.poll_selected_text)
         self.previously_selected_text = None
-        
+
         self.installEventFilter(self)
-        
+
     def eventFilter(self, obj, event):
-        
+
         if event.type() == QtCore.QEvent.WindowDeactivate:
             # start selection polling timer when window loses focus
             self.timer.start()
-            
+
         elif event.type() == QtCore.QEvent.WindowActivate:
             # stop selection polling timer when window gains focus
             self.timer.stop()
-            
+
         return False
-            
+
     def poll_selected_text(self):
-        
+
         try:
             currently_selected = subprocess.check_output('xsel', timeout=1).decode()
         except FileNotFoundError:
@@ -439,19 +439,19 @@ class MainWindow(QtWidgets.QMainWindow):
         except subprocess.TimeoutExpired:
             # sometimes xsel hangs -- can happen when selected text is inside procal
             return
-        
+
         # ignore multi-line selections
         if '\n' in currently_selected or '\r' in currently_selected:
             return
-            
+
         # ignore zero-length selections
         if len(currently_selected) == 0:
             return
-            
+
         # validate currently selected text
         if not is_valid_input(currently_selected):
             return
-            
+
         # make sure current selection differs from previously selected text
         if currently_selected != self.previously_selected_text:
             self.input_field.force_to(currently_selected)
