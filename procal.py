@@ -11,7 +11,6 @@ def twos_complement(onesComplement, nBits):
 
 def is_valid_input(string):
     try:
-        # try evaluating result
         int(eval(string))
         return True
     except (SyntaxError, Exception):
@@ -105,21 +104,27 @@ class BinaryView(QtWidgets.QTableWidget):
         Class inheriting QTableWidget for creating and populating a table containing
         BinaryTableItem, BinaryTableLegend, BinaryTableSpacer elements
     '''
-    def __init__(self):
+    def __init__(self, n_bits):
         QtWidgets.QTableWidget.__init__(self)
 
         self.callbacks = []
         self.table_elements = []
         
-        self.width = 16
-        self.spacers = int(self.width / 8 - 1)
-        self.n_cols = self.width + self.spacers
+        if n_bits not in [32, 64]:
+            print("invalid number of bits requested, choose from 32, 64")
+            return
+        
+        self.n_bits = n_bits
+        
+        # helper variables for constructing table
+        self.width = int(n_bits / 2)
+        self.n_spacers = int(self.width / 8 - 1)
+        self.n_cols = self.width + self.n_spacers
         
         self.init_table_properties()
         self.populate_table()
         
         self.previously_clicked_cell = None
-        
         
     def init_table_properties(self):
         
@@ -154,7 +159,6 @@ class BinaryView(QtWidgets.QTableWidget):
             if col == 8 or col == 17 or col == 26:
                 self.setItem(2, reverse_index, BinaryTableSpacer())
                 self.setItem(3, reverse_index, BinaryTableSpacer())
-                print(f'col {col} is spacer')
             else:
                 item = BinaryTableItem(digit_index)
                 self.table_elements.append(item)
@@ -163,7 +167,6 @@ class BinaryView(QtWidgets.QTableWidget):
                 item = BinaryTableLegend(digit_index)
                 self.setItem(2, reverse_index, item)
 
-                print(f'col {col} has index {digit_index}, true col {reverse_index}')
                 digit_index += 1
 
         for col in range(self.n_cols):
@@ -193,21 +196,19 @@ class BinaryView(QtWidgets.QTableWidget):
         
     def set_value(self, value):
         
-        print(f'set value {value}')
-        
         # reset bit limits (if previous val was neg)
         for bit in self.table_elements:
             bit.set_is_bit_limit(False)
         
         # sanity check: abort if we cannot display it
-        if type(value) != int or value >= 2**32:
+        if type(value) != int or value >= 2**self.n_bits:
             return
             
         if value < 0:
             self.table_elements[-1].set_is_bit_limit(True)
             
         # upadte bit field to match value
-        for bit in range(32):
+        for bit in range(self.n_bits):
             if (1 << bit) & value:
                 self.table_elements[bit].force_to(True)
             else:
@@ -267,7 +268,7 @@ class BinaryView(QtWidgets.QTableWidget):
         self._callback(val)
 
         
-    def get_bit_limit(self):
+    def get_current_bit_limit(self):
         limit = None
         
         for bit in self.table_elements:
@@ -275,10 +276,13 @@ class BinaryView(QtWidgets.QTableWidget):
                 limit = bit.index + 1
         
         return limit
+        
+    def get_max_n_bits(self):
+        return self.n_bits
 
     def _callback(self, value):
         
-        bit_limit = self.get_bit_limit()
+        bit_limit = self.get_current_bit_limit()
         
         for cb in self.callbacks:
             if bit_limit is not None:
@@ -292,11 +296,12 @@ class InputLabel(QtWidgets.QLineEdit):
         Class inheriting QLineEdit for taking user input and evaluating 
         it as python code, propagating the result if it can be cast to int
     '''
-    def __init__(self):
+    def __init__(self, n_bits):
         QtWidgets.QLineEdit.__init__(self)
         self.setAlignment(QtCore.Qt.AlignRight)
         self.returnPressed.connect(self._on_changed)
         self.callbacks = []
+        self.n_bits = n_bits
 
     def connect(self, callback):
         self.callbacks.append(callback)
@@ -318,8 +323,8 @@ class InputLabel(QtWidgets.QLineEdit):
         try:
             # evaluate input and try casting result to int
             res = int(eval(self.text()))
-            if res >= 2**32:
-                self._callback('Out of 32 bit range')
+            if res >= 2**self.n_bits:
+                self._callback(f'Out of {self.n_bits} bit range')
             else:
                 self._callback(res)
         
@@ -352,10 +357,8 @@ class ResultField(QtWidgets.QLabel):
         else:
             if is_signed:
                 as_signed = twos_complement(result, bit_depth)
-                print(f'signed: reuslt {result} as_signed {as_signed}')
                 self.setText(f'0b{result:b} = {as_signed} = 0x{result:x}')
             else:
-                print(f'not signed: reuslt {result}')
                 self.setText(f'0b{result:b} = {result} = 0x{result:x}')
         
 class MainWindow(QtWidgets.QMainWindow):
@@ -370,8 +373,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resultLayout = QtWidgets.QHBoxLayout()
         
         # create fields
-        self.input_field = InputLabel()
-        binary_view = BinaryView()
+        self.input_field = InputLabel(32)
+        binary_view = BinaryView(32)
         binary_result = ResultField()
         reset_button = QtWidgets.QPushButton('Clear')
         
