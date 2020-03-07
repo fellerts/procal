@@ -46,7 +46,7 @@ class BinaryTableItem(QtWidgets.QTableWidgetItem):
         # notify_pressed did not trigger, we are entering this cell from elsewhere.
         if not self.is_pressed:
             self._toggle()
-
+        
         # this bug only happens once, so we can clear the pressed flag here.
         self.is_pressed = False
 
@@ -104,15 +104,27 @@ class BinaryView(QtWidgets.QTableWidget):
         Class inheriting QTableWidget for creating and populating a table containing
         BinaryTableItem, BinaryTableLegend, BinaryTableSpacer elements
     '''
-    def __init__(self, n_bits):
+    def __init__(self, n_bits=32):
         QtWidgets.QTableWidget.__init__(self)
 
         self.callbacks = []
         self.table_elements = []
-
+        self.previously_clicked_cell = None
+        
+        # register callback for mouse event (cell entered while mouse pressed)
+        self.itemEntered.connect(self.on_item_entered)
+        
+        self.set_new_bit_width(n_bits)
+        
+    def set_new_bit_width(self, n_bits):
         if n_bits not in [32, 64]:
             print("invalid number of bits requested, choose from 32, 64")
             return
+            
+        # delete table elements if they exist
+        while self.rowCount() > 0:
+            self.removeRow(0)
+        self.table_elements = []
 
         self.n_bits = n_bits
 
@@ -124,8 +136,6 @@ class BinaryView(QtWidgets.QTableWidget):
         self.init_table_properties()
         self.populate_table()
 
-        self.previously_clicked_cell = None
-
     def init_table_properties(self):
 
         # we need four rows (2 rows of bits, 2 rows of labels)
@@ -134,9 +144,6 @@ class BinaryView(QtWidgets.QTableWidget):
         # we need 17 columns (16 columns of bits, one spacer column)
         self.setColumnCount(self.n_cols)
         self.horizontalHeader().setMaximumSectionSize(25)
-
-        # register callback for mouse event (cell entered while mouse pressed)
-        self.itemEntered.connect(self.on_item_entered)
 
         # set table visual properties
         self.horizontalHeader().setVisible(False)
@@ -195,7 +202,7 @@ class BinaryView(QtWidgets.QTableWidget):
         return val
 
     def set_value(self, value):
-
+        
         # reset bit limits (if previous val was neg)
         for bit in self.table_elements:
             bit.set_is_bit_limit(False)
@@ -206,7 +213,7 @@ class BinaryView(QtWidgets.QTableWidget):
 
         if value < 0:
             self.table_elements[-1].set_is_bit_limit(True)
-
+        
         # upadte bit field to match value
         for bit in range(self.n_bits):
             if (1 << bit) & value:
@@ -220,11 +227,11 @@ class BinaryView(QtWidgets.QTableWidget):
     def connect(self, callback):
         self.callbacks.append(callback)
 
-    def set_new_bit_limit_cell(self, new_cell):
+    def set_sign_bit_index(self, index):
 
         # update all bits
         for bit in self.table_elements:
-            if bit == new_cell:
+            if bit.index == index:
                 # toggle whether the bit that was clicked is the new
                 # bit limit
                 bit.toggle_is_bit_limit()
@@ -251,10 +258,10 @@ class BinaryView(QtWidgets.QTableWidget):
             self._callback(val)
         elif event.button() == QtCore.Qt.RightButton:
             self.previously_clicked_cell = cell
-            self.set_new_bit_limit_cell(cell)
+            self.set_sign_bit_index(cell.index)
 
     def on_item_entered(self, item):
-
+        
         if not isinstance(item, BinaryTableItem):
             return
 
@@ -267,13 +274,12 @@ class BinaryView(QtWidgets.QTableWidget):
         val = self.get_value()
         self._callback(val)
 
-
-    def get_current_bit_limit(self):
+    def get_sign_bit_index(self):
         limit = None
 
         for bit in self.table_elements:
             if bit.is_bit_limit:
-                limit = bit.index + 1
+                limit = bit.index
 
         return limit
 
@@ -282,7 +288,7 @@ class BinaryView(QtWidgets.QTableWidget):
 
     def _callback(self, value):
 
-        bit_limit = self.get_current_bit_limit()
+        bit_limit = self.get_sign_bit_index()
 
         for cb in self.callbacks:
             if bit_limit is not None:
@@ -301,7 +307,8 @@ class InputLabel(QtWidgets.QLineEdit):
         self.setAlignment(QtCore.Qt.AlignRight)
         self.returnPressed.connect(self._on_changed)
         self.callbacks = []
-        self.n_bits = n_bits
+        
+        self.set_new_bit_width(n_bits)
 
     def connect(self, callback):
         self.callbacks.append(callback)
@@ -313,7 +320,12 @@ class InputLabel(QtWidgets.QLineEdit):
     def force_to(self, value):
         self.setText(value)
         self._on_changed()
-
+        
+    def set_new_bit_width(self, n_bits):
+        if n_bits not in [32, 64]:
+            return
+        self.n_bits = n_bits
+        
     def _callback(self, value):
         for cb in self.callbacks:
             cb(value)
@@ -356,10 +368,26 @@ class ResultField(QtWidgets.QLabel):
             self.setText(f'{result}')
         else:
             if is_signed:
-                as_signed = twos_complement(result, bit_depth)
+                as_signed = twos_complement(result, bit_depth + 1)
                 self.setText(f'0b{result:b} = {as_signed} = 0x{result:x}')
             else:
                 self.setText(f'0b{result:b} = {result} = 0x{result:x}')
+
+class ExpandLabel(QtWidgets.QLabel):
+    def __init__(self, on_clicked):
+        QtWidgets.QLabel.__init__(self)
+        self.do_expand_text = '>'
+        self.do_contract_text = '<'
+        self.on_clicked = on_clicked
+        self.setText(self.do_expand_text)
+
+    def mousePressEvent(self, event):
+        if self.text() == self.do_expand_text:
+            self.setText(self.do_contract_text)
+            self.on_clicked(True)
+        else:
+            self.setText(self.do_expand_text)
+            self.on_clicked(False)
 
 class MainWindow(QtWidgets.QMainWindow):
 
@@ -374,15 +402,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # create fields
         self.input_field = InputLabel(32)
-        binary_view = BinaryView(32)
-        binary_result = ResultField()
+        self.binary_view = BinaryView(32)
+        self.binary_result = ResultField()
         reset_button = QtWidgets.QPushButton('Clear')
+        size_label = ExpandLabel(self.on_expand_label_clicked)
 
         # connect input field valid result to binary view update
-        self.input_field.connect(binary_view.set_value)
+        self.input_field.connect(self.binary_view.set_value)
 
         # connect binary view update to binary result label
-        binary_view.connect(binary_result.set_result)
+        self.binary_view.connect(self.binary_result.set_result)
 
         # connect reset button to input field reset
         reset_button.clicked.connect(self.input_field.reset)
@@ -390,9 +419,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # place widgets in layouts
         self.inputLayout.addWidget(reset_button)
         self.inputLayout.addWidget(self.input_field)
-        self.resultLayout.addWidget(binary_result)
+        self.resultLayout.addWidget(size_label)
+        self.resultLayout.addWidget(self.binary_result)
+        
         self.layout.addLayout(self.inputLayout)
-        self.layout.addWidget(binary_view)
+        self.layout.addWidget(self.binary_view)
         self.layout.addLayout(self.resultLayout)
 
         # add layout to the central widget
@@ -405,8 +436,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_field.setFocus()
         self.input_field.selectAll()
 
-        # don't allow resizing of window
-        self.setFixedSize(self.central_widget.sizeHint())
+        # set fixed size and save the size so we can return to it if we 
+        # expand then contract
+        self.contracted_size = self.central_widget.sizeHint()
+        self.setFixedSize(self.contracted_size)
 
         # create timer for polling xsel to get selected text
         self.timer = QtCore.QTimer()
@@ -415,6 +448,50 @@ class MainWindow(QtWidgets.QMainWindow):
         self.previously_selected_text = None
 
         self.installEventFilter(self)
+        
+    def on_expand_label_clicked(self, do_expand):
+        if do_expand:
+            # keep current value and sign bit
+            curr_val = self.binary_view.get_value()
+            sign_bit = self.binary_view.get_sign_bit_index()
+            
+            # we can always expand from 64 to 32.
+            self.binary_view.set_new_bit_width(64)
+            self.input_field.set_new_bit_width(64)
+            
+            # refresh table
+            self.binary_view.set_value(curr_val)
+            
+            self.expanded_size = self.central_widget.sizeHint()
+            self.setFixedSize(self.expanded_size)
+            
+            # if curr_val was signed, update sign bit as well
+            if sign_bit:
+                self.binary_view.set_sign_bit_index(sign_bit)
+            
+        else:
+            # snip all bits > 32 to we can contract
+            curr_val = self.binary_view.get_value()
+            sign_bit = self.binary_view.get_sign_bit_index()
+            new_val = curr_val & 0xFFFFFFFF
+            
+            # temporarily force table to 0 so the result label fits
+            # within a smaller window, this way the window is resized properly
+            self.binary_result.set_result(0)
+            
+            # resize the table
+            self.binary_view.set_new_bit_width(32)
+            self.input_field.set_new_bit_width(32)
+            
+            self.setFixedSize(self.contracted_size)
+        
+            # refresh table with the old value sans 32 MBS
+            self.binary_view.set_value(new_val)
+            
+            # if curr_val was signed, update sign bit as well
+            if sign_bit:
+                if sign_bit < 32:
+                    self.binary_view.set_sign_bit_index(sign_bit)
 
     def eventFilter(self, obj, event):
 
