@@ -1,5 +1,5 @@
 
-from PyQt5 import QtGui, QtCore, QtWidgets, QtWidgets
+from PyQt5 import QtGui, QtCore, QtWidgets
 
 import sys
 import subprocess
@@ -442,6 +442,7 @@ class InputLabel(QtWidgets.QLineEdit):
 
     def __init__(self, n_bits):
         QtWidgets.QLineEdit.__init__(self)
+        self.setFont(QtGui.QFont('monospace', 10))
         self.setAlignment(QtCore.Qt.AlignRight)
         self.returnPressed.connect(self._on_changed)
         self.callbacks = []
@@ -483,9 +484,9 @@ class InputLabel(QtWidgets.QLineEdit):
                 self._callback(res)
                 
         # int() cast will fail is result is not integer, report "syntax error"
-        except SyntaxError as e:
+        except SyntaxError:
             self._callback('syntax error')
-        except Exception as e:
+        except Exception:
             self._callback('syntax error')
 
         self.setFocus()
@@ -505,6 +506,8 @@ class ResultField(QtWidgets.QLabel):
 
         # allow user to select text
         self.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        
+        self.setFrameStyle(QtWidgets.QFrame.StyledPanel)
 
     def _float32_string(self, as_hex):
         res = ''
@@ -526,24 +529,21 @@ class ResultField(QtWidgets.QLabel):
 
     def set_result(self, as_unsigned, as_signed=None, as_flt=None):
         
-        print('set result')
-        print(as_unsigned, as_signed, as_flt)
-        
-        result_string = f'0b{as_unsigned:b} = '
-
-        if as_flt is not None:
-            _, string = to_float(as_unsigned)
-            result_string += string
-            result_string += f' = {as_flt:E}'
-        elif as_signed is not None:
-            result_string += f'{as_signed}'
+        binary_part = f'0b{as_unsigned:b}\n'
+        # if as_flt is not None:
+        # 	_, string = to_float(as_unsigned)
+        # 	result_string = f' = {as_flt:E}'
+        if as_signed is not None:
+            int_part = f'{as_signed}\n'
         else:
-            result_string += f'{as_unsigned}'
+            int_part = f'{as_unsigned}\n'
 
-        result_string += f' = 0x{as_unsigned:x}'
-
-        self.setText(result_string)
-
+        hex_part = f'0x{as_unsigned:x}'
+        
+        full = binary_part + int_part + hex_part
+        
+        self.setText(full)
+                
 class ExpandLabel(QtWidgets.QLabel):
     def __init__(self, on_clicked):
         QtWidgets.QLabel.__init__(self)
