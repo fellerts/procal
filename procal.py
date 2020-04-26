@@ -6,17 +6,15 @@ import subprocess
 import struct
 
 # helper function for calculating two's complement at arbitrary bit depth
-
-
 def twos_complement(onesComplement, nBits):
     if onesComplement & 1 << (nBits - 1) == 0:
         return onesComplement
     else:
         return ((~onesComplement + 1) & ((1 << nBits) - 1)) * -1
 
-
+# interpret the bits of value as IEEE 754 floating point number
+# see https://en.wikipedia.org/wiki/IEEE_754
 def to_float(value):
-    # see https://en.wikipedia.org/wiki/IEEE_754
     literal = 0
     string = ''
 
@@ -35,7 +33,6 @@ def to_float(value):
         part = 2 ** (((value >> 23) & 0xFF) - 127)
         literal *= part
         string += f'2^({((value >> 23) & 0xFF) - 127})*'
-        
 
     # coefficient = {1,0}.(b22 b21 ... b0)
     if exponent is 0x00:
@@ -54,14 +51,61 @@ def to_float(value):
     
     return literal, string
 
+class InputLabel(QtWidgets.QLineEdit):
+    '''
+        Class inheriting QLineEdit for taking user input and evaluating
+        it as python code, propagating the result if it can be cast to int
+    '''
 
-def is_valid_input(string):
-    try:
-        int(eval(string))
-        return True
-    except (SyntaxError, Exception):
-        return False
+    def __init__(self, n_bits):
+        QtWidgets.QLineEdit.__init__(self)
+        self.setFont(QtGui.QFont('monospace', 10))
+        self.setAlignment(QtCore.Qt.AlignRight)
+        self.returnPressed.connect(self._on_changed)
+        self.callbacks = []
 
+        self.set_new_bit_width(n_bits)
+
+    def connect(self, callback):
+        self.callbacks.append(callback)
+
+    def reset(self):
+        self.setText('0')
+        self._callback(0)
+
+    def force_to(self, value):
+        self.setText(value)
+        self._on_changed()
+
+    def set_new_bit_width(self, n_bits):
+        if n_bits not in [32, 64]:
+            return
+        self.n_bits = n_bits
+
+    def _callback(self, value):
+        for cb in self.callbacks:
+            cb(value)
+
+    def _on_changed(self):
+
+        try:
+            # evaluate input
+            res = eval(self.text())
+            
+            if type(res) == int:
+                if res >= 2**self.n_bits:
+                    self._callback(f'Out of {self.n_bits} bit range')
+                else:
+                    self._callback(res)
+            elif type(res) == float:
+                self._callback(res)
+                
+        # int() cast will fail is result is not integer, report "syntax error"
+        except (SyntaxError, Exception):
+            self._callback('syntax error')
+
+        self.setFocus()
+        self.selectAll()
 
 class BinaryTableItem(QtWidgets.QTableWidgetItem):
     '''
@@ -165,6 +209,8 @@ class BinaryView(QtWidgets.QTableWidget):
     '''
         Class inheriting QTableWidget for creating and populating a table containing
         BinaryTableItem, BinaryTableLegend, BinaryTableSpacer elements
+        
+        Has experimental support for float (IEEE 754)
     '''
 
     MODE_FLOAT = 1
@@ -175,12 +221,12 @@ class BinaryView(QtWidgets.QTableWidget):
 
         self.callbacks = []
         self.table_elements = []
-        self.previously_clicked_cell = None
         self.mode = mode
+        self.previously_clicked_cell = None
+        self.error_message = None
 
         # register callback for mouse event (cell entered while mouse pressed)
         self.itemEntered.connect(self.on_item_entered)
-
         self.set_new_bit_width(n_bits)
 
     def set_new_bit_width(self, n_bits):
@@ -244,8 +290,7 @@ class BinaryView(QtWidgets.QTableWidget):
         self.setShowGrid(False)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.setSizeAdjustPolicy(
-            QtWidgets.QAbstractScrollArea.AdjustToContents)
+        self.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
         self.resizeColumnsToContents()
 
     def populate_table_float(self):
@@ -339,6 +384,12 @@ class BinaryView(QtWidgets.QTableWidget):
 
     def set_value(self, value):
         
+        if type(value) == str:
+            # string input interpreted as error message
+            self.error_message = value
+            self._callback()
+            return
+        
         # reset bit limits (if previous val was neg)
         for bit in self.table_elements:
             bit.set_is_bit_limit(False)
@@ -431,66 +482,10 @@ class BinaryView(QtWidgets.QTableWidget):
         signed, unsigned, flt = self.get_value()
 
         for cb in self.callbacks:
-            cb(signed, unsigned, flt)
-
-
-class InputLabel(QtWidgets.QLineEdit):
-    '''
-        Class inheriting QLineEdit for taking user input and evaluating
-        it as python code, propagating the result if it can be cast to int
-    '''
-
-    def __init__(self, n_bits):
-        QtWidgets.QLineEdit.__init__(self)
-        self.setFont(QtGui.QFont('monospace', 10))
-        self.setAlignment(QtCore.Qt.AlignRight)
-        self.returnPressed.connect(self._on_changed)
-        self.callbacks = []
-
-        self.set_new_bit_width(n_bits)
-
-    def connect(self, callback):
-        self.callbacks.append(callback)
-
-    def reset(self):
-        self.setText('0')
-        self._callback(0)
-
-    def force_to(self, value):
-        self.setText(value)
-        self._on_changed()
-
-    def set_new_bit_width(self, n_bits):
-        if n_bits not in [32, 64]:
-            return
-        self.n_bits = n_bits
-
-    def _callback(self, value):
-        for cb in self.callbacks:
-            cb(value)
-
-    def _on_changed(self):
-
-        try:
-            # evaluate input
-            res = eval(self.text())
-            
-            if type(res) == int:
-                if res >= 2**self.n_bits:
-                    self._callback(f'Out of {self.n_bits} bit range')
-                else:
-                    self._callback(res)
-            elif type(res) == float:
-                self._callback(res)
-                
-        # int() cast will fail is result is not integer, report "syntax error"
-        except SyntaxError:
-            self._callback('syntax error')
-        except Exception:
-            self._callback('syntax error')
-
-        self.setFocus()
-        self.selectAll()
+            cb(signed, unsigned, flt, self.error_message)
+        
+        # error message has been propagated, clear it
+        self.error_message = None
 
 
 class ResultField(QtWidgets.QLabel):
@@ -506,6 +501,7 @@ class ResultField(QtWidgets.QLabel):
 
         # allow user to select text
         self.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        self.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
         
         self.setFrameStyle(QtWidgets.QFrame.StyledPanel)
 
@@ -527,30 +523,34 @@ class ResultField(QtWidgets.QLabel):
 
         return res
 
-    def set_result(self, as_unsigned, as_signed=None, as_flt=None):
+    def set_result(self, as_unsigned=None, as_signed=None, as_flt=None, error_message=None):
         
-        binary_part = f'0b{as_unsigned:b}\n'
-        # if as_flt is not None:
-        # 	_, string = to_float(as_unsigned)
-        # 	result_string = f' = {as_flt:E}'
-        if as_signed is not None:
-            int_part = f'{as_signed}\n'
+        if error_message is not None:
+            self.setText(error_message)
         else:
-            int_part = f'{as_unsigned}\n'
+            binary_part = f'0b{as_unsigned:b}\n'
+            # if as_flt is not None:
+            # 	_, string = to_float(as_unsigned)
+            # 	result_string = f' = {as_flt:E}'
+            if as_signed is not None:
+                int_part = f'{as_signed}\n'
+            else:
+                int_part = f'{as_unsigned}\n'
 
-        hex_part = f'0x{as_unsigned:x}'
-        
-        full = binary_part + int_part + hex_part
-        
-        self.setText(full)
+            hex_part = f'0x{as_unsigned:x}'
+            
+            full = binary_part + int_part + hex_part
+            
+            self.setText(full)
                 
 class ExpandLabel(QtWidgets.QLabel):
     def __init__(self, on_clicked):
         QtWidgets.QLabel.__init__(self)
-        self.do_expand_text = '>'
-        self.do_contract_text = '<'
+        self.do_expand_text = '> '
+        self.do_contract_text = '< '
         self.on_clicked = on_clicked
         self.setText(self.do_expand_text)
+        self.setFont(QtGui.QFont('monospace', 10))
 
     def mousePressEvent(self, event):
         if self.text() == self.do_expand_text:
@@ -699,9 +699,11 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         # validate currently selected text
-        if not is_valid_input(currently_selected):
+        try:
+            int(eval(currently_selected))
+        except (SyntaxError, Exception):
             return
-
+        
         # make sure current selection differs from previously selected text
         if currently_selected != self.previously_selected_text:
             self.input_field.force_to(currently_selected)
