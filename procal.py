@@ -203,6 +203,10 @@ class BinaryView(QtWidgets.QTableWidget):
 
     def set_value(self, value):
         
+        # if value is a string, pass it through without updating
+        if type(value) == str:
+            self._callback(value)
+        
         # reset bit limits (if previous val was neg)
         for bit in self.table_elements:
             bit.set_is_bit_limit(False)
@@ -304,6 +308,7 @@ class InputLabel(QtWidgets.QLineEdit):
     '''
     def __init__(self, n_bits):
         QtWidgets.QLineEdit.__init__(self)
+        self.setFont(QtGui.QFont('monospace', 10))
         self.setAlignment(QtCore.Qt.AlignRight)
         self.returnPressed.connect(self._on_changed)
         self.callbacks = []
@@ -333,12 +338,16 @@ class InputLabel(QtWidgets.QLineEdit):
     def _on_changed(self):
 
         try:
-            # evaluate input and try casting result to int
-            res = int(eval(self.text()))
-            if res >= 2**self.n_bits:
+            res = float(eval(self.text()))
+            
+            if not res.is_integer():
+                print('not integer')
+                self._callback('Result is a float')
+            elif res >= 2**self.n_bits:
                 self._callback(f'Out of {self.n_bits} bit range')
             else:
-                self._callback(res)
+                print('callback')
+                self._callback(int(res))
 
         # int() cast will fail is result is not integer, report "syntax error"
         except (SyntaxError, Exception):
@@ -355,24 +364,37 @@ class ResultField(QtWidgets.QLabel):
         QtWidgets.QLabel.__init__(self)
         self.setAlignment(QtCore.Qt.AlignRight)
         self.result = ""
+        self.setFont(QtGui.QFont('monospace', 10))
 
         # allow user to select text
         self.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
-
+        self.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
+        self.setFrameStyle(QtWidgets.QFrame.StyledPanel)
+        
     def set_result(self, result, is_signed=False, bit_depth=None):
 
         self.result = result
 
         if type(result) == str:
             # display string results immediately
-            self.setText(f'{result}')
+            self.setText(f'\n{result}')
         else:
-            if is_signed:
-                as_signed = twos_complement(result, bit_depth + 1)
-                self.setText(f'0b{result:b} = {as_signed} = 0x{result:x}')
-            else:
-                self.setText(f'0b{result:b} = {result} = 0x{result:x}')
+            binary_part = f'0b{result:b}\n'
 
+            if is_signed:
+                int_part = f'{twos_complement(result, bit_depth + 1)}\n'
+            else:
+                int_part = f'{result}\n'
+            
+            hex_part = f'0x{result:x}'
+                
+            self.setText(binary_part + int_part + hex_part)
+
+class ExpandButton(QtWidgets.QCheckBox):
+    def __init__(self, text):
+        QtWidgets.QCheckBox.__init__(self, text)
+        
+        
 class ExpandLabel(QtWidgets.QLabel):
     def __init__(self, on_clicked):
         QtWidgets.QLabel.__init__(self)
@@ -380,6 +402,8 @@ class ExpandLabel(QtWidgets.QLabel):
         self.do_contract_text = '<'
         self.on_clicked = on_clicked
         self.setText(self.do_expand_text)
+        self.setFont(QtGui.QFont('monospace', 10))
+        self.setFrameStyle(QtWidgets.QFrame.StyledPanel)
 
     def mousePressEvent(self, event):
         if self.text() == self.do_expand_text:
@@ -405,7 +429,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.binary_view = BinaryView(32)
         self.binary_result = ResultField()
         reset_button = QtWidgets.QPushButton('Clear')
-        size_label = ExpandLabel(self.on_expand_label_clicked)
+        # size_label = ExpandLabel(self.on_expand_label_clicked)
+        
+        foo = ExpandButton('64b')
+        bar = ExpandButton('flt')
+        toggles = QtWidgets.QVBoxLayout()
+        toggles.addWidget(foo)
+        toggles.addWidget(bar)
+        
 
         # connect input field valid result to binary view update
         self.input_field.connect(self.binary_view.set_value)
@@ -419,7 +450,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # place widgets in layouts
         self.inputLayout.addWidget(reset_button)
         self.inputLayout.addWidget(self.input_field)
-        self.resultLayout.addWidget(size_label)
+        self.resultLayout.addLayout(toggles)
         self.resultLayout.addWidget(self.binary_result)
         
         self.layout.addLayout(self.inputLayout)
