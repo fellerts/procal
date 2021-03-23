@@ -1,7 +1,5 @@
 from PyQt5 import QtGui, QtCore, QtWidgets, QtWidgets
 
-import sys
-import subprocess
 import struct
 
 
@@ -582,14 +580,6 @@ class MainWindow(QtWidgets.QMainWindow):
         # expand then contract
         self.contracted_size = self.central_widget.sizeHint()
         self.setFixedSize(self.contracted_size)
-
-        # create timer for polling xsel to get selected text
-        self.timer = QtCore.QTimer()
-        self.timer.setInterval(50)
-        self.timer.timeout.connect(self.poll_selected_text)
-        self.previously_selected_text = None
-
-        self.installEventFilter(self)
         
     def on_64b_clicked(self, state):
         if state > 0:
@@ -660,39 +650,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         return False
 
-    def poll_selected_text(self):
-
-        try:
-            currently_selected = subprocess.check_output('xsel', timeout=1).decode()
-        except FileNotFoundError:
-            # guard against xsel not being installed
-            self.timer.stop()
-            return
-        except subprocess.TimeoutExpired:
-            # sometimes xsel hangs -- can happen when selected text is inside procal
-            return
-
-        # ignore multi-line selections
-        if '\n' in currently_selected or '\r' in currently_selected:
-            return
-
-        # ignore zero-length selections
-        if len(currently_selected) == 0:
-            return
-            
-        # validate currently selected text
-        try:
-            int(eval(currently_selected))
-        except (SyntaxError, Exception):
-            return
-
-        # make sure current selection differs from previously selected text
-        if currently_selected != self.previously_selected_text:
-            self.input_field.force_to(currently_selected)
-            self.previously_selected_text = currently_selected
-
 if __name__ == "__main__":
     # boilerplate for starting Qt applications
+    import sys
     app = QtWidgets.QApplication(sys.argv)
     main_window = MainWindow()
     main_window.show()
