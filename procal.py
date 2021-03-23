@@ -444,7 +444,7 @@ class BinaryView(QtWidgets.QTableWidget):
 
 class InputLabel(QtWidgets.QLineEdit):
     '''
-        Class inheriting QLineEdit for taking user input and evaluating
+        Class inheriting QLineEdit for taking user input and evaluating (!)
         it as python code, propagating the result if it can be cast to int
     '''
     def __init__(self):
@@ -528,9 +528,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.central_widget = QtWidgets.QWidget()
 
         # make layouts to contain widgets
-        self.layout = QtWidgets.QVBoxLayout()
-        self.inputLayout = QtWidgets.QHBoxLayout()
-        self.resultLayout = QtWidgets.QHBoxLayout()
+        self.main_layout = QtWidgets.QVBoxLayout()
+        self.input_layout = QtWidgets.QHBoxLayout()
+        self.result_layout = QtWidgets.QHBoxLayout()
 
         # create fields
         self.input_field = InputLabel()
@@ -557,17 +557,17 @@ class MainWindow(QtWidgets.QMainWindow):
         reset_button.clicked.connect(self.input_field.reset)
 
         # place widgets in layouts
-        self.inputLayout.addWidget(reset_button)
-        self.inputLayout.addWidget(self.input_field)
-        self.resultLayout.addLayout(toggles)
-        self.resultLayout.addWidget(self.binary_result)
+        self.input_layout.addWidget(reset_button)
+        self.input_layout.addWidget(self.input_field)
+        self.result_layout.addLayout(toggles)
+        self.result_layout.addWidget(self.binary_result)
         
-        self.layout.addLayout(self.inputLayout)
-        self.layout.addWidget(self.binary_view)
-        self.layout.addLayout(self.resultLayout)
+        self.main_layout.addLayout(self.input_layout)
+        self.main_layout.addWidget(self.binary_view)
+        self.main_layout.addLayout(self.result_layout)
 
         # add layout to the central widget
-        self.central_widget.setLayout(self.layout)
+        self.central_widget.setLayout(self.main_layout)
         self.setCentralWidget(self.central_widget)
 
         # initialize input field, this cascades to the binary view
@@ -615,7 +615,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
             self.setFixedSize(self.contracted_size)
 
-            # refresh table with the old value sans 32 MBS
+            # refresh table with the old value sans 32 MSB
             self.binary_view.set_value(float(new_val))
 
             # if curr_val was signed, update sign bit as well
