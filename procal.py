@@ -13,10 +13,10 @@ def to_float(value):
     sign = (value >> 31) & 0x01
     exponent = (value >> 23) & 0xFF
     fraction = (value & 0x7FFFFF)
-    
+
     literal = (-1) ** (sign)
     string += f'{(-1) ** (sign)}*'
-    
+
     if exponent == 0xFF:
         # nan/inf
         if fraction == 0x00:
@@ -26,22 +26,21 @@ def to_float(value):
                 literal = float('+inf')
         else:
             literal = float('nan')
-        
+
         string = ''
-            
+
     elif exponent == 0x00:
         # subnormal number
         literal *= 2 ** (-126) * fraction / (2**23)
         string += f'2^(-126)*({fraction / (2**23)})'
-        
     else:
         # normal number
         literal *= 2 ** ((exponent) - 127)
         literal *= (1 + fraction / (2**23))
-        
+
         string += f'2^({exponent} - 127)*'
         string += f'({1 + fraction / (2**23)})'
-    
+
     return literal, string
 
 
@@ -69,12 +68,12 @@ class BinaryTableItem(QtWidgets.QTableWidgetItem):
         self._toggle()
 
     def notify_entered_while_pressed(self):
-        # but in qt: when mouse is pressed down inside a cell, notify_pressed triggers
+        # bug(?): when mouse is pressed down inside a cell, notify_pressed triggers
         # and then notify_entered_while_pressed when mouse starts moving. However if
         # notify_pressed did not trigger, we are entering this cell from elsewhere.
         if not self.is_pressed:
             self._toggle()
-        
+
         # this bug only happens once, so we can clear the pressed flag here.
         self.is_pressed = False
 
@@ -102,7 +101,6 @@ class BinaryTableItem(QtWidgets.QTableWidgetItem):
     def force_to(self, value):
         self.value = value
         self.setText(f'{self.value:b}')
-
         self._update_color()
 
 
@@ -145,7 +143,7 @@ class BinaryView(QtWidgets.QTableWidget):
         Class inheriting QTableWidget for creating and populating a table containing
         BinaryTableItem, BinaryTableLegend, BinaryTableSpacer elements
     '''
-    
+
     MODE_FLOAT = 1
     MODE_INT = 2
 
@@ -157,65 +155,65 @@ class BinaryView(QtWidgets.QTableWidget):
         self.mode = mode
         self.error_message = None
         self.previously_clicked_cell = None
-        
+
         # register callback for mouse event (cell entered while mouse pressed)
         self.itemEntered.connect(self._on_item_entered)
         self.set_new_bit_width(n_bits)
-        
+
     def new_mode(self, mode):
         if mode == self.mode:
             return
-            
+
         self.mode = mode
         self.set_new_bit_width(32)
-     
+
     def get_value(self):
+        # Returns an interpretation of the binary number present in the view
 
+        # find unsigned value
         as_uint = 0
-
-        # grab unsigned value
         for item in self.table_elements:
             if item.value:
                 as_uint += (1 << item.index)
 
-        # grab signed value
+        # find signed value
         bit_limit = self.get_sign_bit_index()
         if bit_limit is not None:
-            as_signed = self._twos_complement(as_uint, bit_limit + 1)
+            as_int = self._twos_complement(as_uint, bit_limit + 1)
         else:
-            as_signed = None
+            as_int = None
 
         if self.mode == self.MODE_INT:
-            return as_uint, as_signed, None
+            return as_uint, as_int, None
         elif self.mode == self.MODE_FLOAT:
             as_float, _ = to_float(as_uint)
-            return as_uint, as_signed, as_float
+            return as_uint, as_int, as_float
 
     def set_value(self, value):
-        
+
         if type(value) == str:
             # string input interpreted as error message
             self.error_message = value
             self._callback()
             return
-        
+
         if self.mode == self.MODE_INT and value.is_integer() is not True:
             # got a float while in int mode, warn user
             self.error_message = '\nCannot represent float in int mode'
             self._callback()
             return
-            
+
         if self.mode == self.MODE_FLOAT:
             # pack and unpack to get integer representation of hex
             tmp = struct.pack('>f', value)
             value = int(tmp.hex(), 16)
-            
-        # reset bit limits (if previous val was neg)
+
+        # reset bit limits (in case previous value was signed)
         for bit in self.table_elements:
             bit.set_is_bit_limit(False)
-            
+
         value = int(value)
-        
+
         # sanity check: abort if we cannot display it
         if value >= 2**self.n_bits:
             self.error_message = f'Out of {self.n_bits} bit range'
@@ -232,23 +230,17 @@ class BinaryView(QtWidgets.QTableWidget):
                 self.table_elements[bit].force_to(False)
 
         self._callback()
-        
+
     def connect(self, callback):
         self.callbacks.append(callback)
 
     def set_sign_bit_index(self, index):
-
-        # update all bits
         for bit in self.table_elements:
             if bit.index == index:
-                # toggle whether the bit that was clicked is the new
-                # bit limit
                 bit.toggle_is_bit_limit()
             else:
-                # tell all the other bits that they are not bit limit
                 bit.set_is_bit_limit(False)
 
-        # user clicked but has not yet released in item
         self._callback()
 
     def mousePressEvent(self, event):
@@ -256,7 +248,6 @@ class BinaryView(QtWidgets.QTableWidget):
         cell = self.itemAt(event.pos())
 
         if not isinstance(cell, BinaryTableItem):
-            # ignore clicks in spacer and legend cells
             return
 
         if event.button() == QtCore.Qt.LeftButton:
@@ -269,13 +260,13 @@ class BinaryView(QtWidgets.QTableWidget):
             if self.mode == self.MODE_INT:
                 self.previously_clicked_cell = cell
                 self.set_sign_bit_index(cell.index)
-                
-   
+
+
     def set_new_bit_width(self, n_bits):
         if n_bits not in [32, 64]:
             print("invalid number of bits requested, choose from 32, 64")
             return
-            
+
         # delete table elements if they exist
         while self.rowCount() > 0:
             self.removeRow(0)
@@ -288,7 +279,6 @@ class BinaryView(QtWidgets.QTableWidget):
         self.n_spacers = int(self.width / 8 - 1)
         self.n_cols = self.width + self.n_spacers
 
-
         if self.mode == self.MODE_FLOAT:
             self._init_table_properties_float()
             self._populate_table_float()
@@ -300,20 +290,12 @@ class BinaryView(QtWidgets.QTableWidget):
 
         self.setRowCount(4)
 
-        # we need 34 columns (32 for bits, 2 for columns)
+        # we need 34 columns (32 for bits, 2 for spacers)
         self.n_cols = 34
         self.setColumnCount(self.n_cols)
         self.horizontalHeader().setMaximumSectionSize(25)
+        self._set_visual_properties()
 
-        # set table visual properties
-        self.horizontalHeader().setVisible(False)
-        self.verticalHeader().setVisible(False)
-        self.setFocusPolicy(False)
-        self.setShowGrid(False)
-        self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
-        self.resizeColumnsToContents()
 
     def _init_table_properties_int(self):
 
@@ -323,8 +305,9 @@ class BinaryView(QtWidgets.QTableWidget):
         # we need 17 columns (16 columns of bits, one spacer column)
         self.setColumnCount(self.n_cols)
         self.horizontalHeader().setMaximumSectionSize(25)
+        self._set_visual_properties()
 
-        # set table visual properties
+    def _set_visual_properties(self):
         self.horizontalHeader().setVisible(False)
         self.verticalHeader().setVisible(False)
         self.setFocusPolicy(False)
@@ -361,7 +344,7 @@ class BinaryView(QtWidgets.QTableWidget):
         self.setItem(2, 0,  BinaryTableLabel('Sign'))
         self.setItem(2, 2,  BinaryTableLabel('Exponent'))
         self.setItem(2, 11, BinaryTableLabel('Mantissa'))
-        
+
     def _populate_table_int(self):
 
         # brute-force way of populating the table with clickable bits, labels and spacers
@@ -403,7 +386,7 @@ class BinaryView(QtWidgets.QTableWidget):
 
 
     def _on_item_entered(self, item):
-        
+
         if not isinstance(item, BinaryTableItem):
             return
 
@@ -430,10 +413,10 @@ class BinaryView(QtWidgets.QTableWidget):
 
         for cb in self.callbacks:
             cb(signed, unsigned, flt, self.error_message)
-        
+
         # error message has been propagated, clear it
         self.error_message = None
-    
+
     def _twos_complement(self, onesComplement, nBits):
         # helper function for calculating two's complement at arbitrary bit depth
         if onesComplement & 1 << (nBits - 1) == 0:
@@ -460,14 +443,14 @@ class InputLabel(QtWidgets.QLineEdit):
     def reset(self):
         self.setText('0')
         self._callback(0.0)
-        
+
     def force_evaluation(self):
         self._on_changed()
 
     def force_to(self, value):
         self.setText(value)
         self._on_changed()
-        
+
     def _callback(self, value):
         for cb in self.callbacks:
             cb(value)
@@ -500,25 +483,25 @@ class ResultField(QtWidgets.QLabel):
         self.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
         self.setFrameStyle(QtWidgets.QFrame.StyledPanel)
 
-    def set_result(self, as_unsigned=None, as_signed=None, as_flt=None, error_message=None):
-        
+    def set_result(self, as_unsigned=None, as_int=None, as_flt=None, error_message=None):
+
         to_print = ''
-        
+
         if error_message is not None:
             to_print = error_message
         else:
             to_print += f'0b{as_unsigned:b}\n'
-            
+
             if as_flt is not None:
                 literal, string = to_float(as_unsigned)
                 to_print += string + f' = {literal}' + '\n'
-            elif as_signed is not None:
-                to_print += f'{as_signed}\n'
+            elif as_int is not None:
+                to_print += f'{as_int}\n'
             else:
                 to_print += f'{as_unsigned}\n'
 
             to_print += f'0x{as_unsigned:x}'
-            
+        self.result = to_print
         self.setText(to_print)
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -537,16 +520,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.binary_view = BinaryView(32, BinaryView.MODE_INT)
         self.binary_result = ResultField()
         reset_button = QtWidgets.QPushButton('Clear')
-        
+
         self.check_64b = QtWidgets.QCheckBox('64 bit')
         self.check_flt = QtWidgets.QCheckBox('float')
         toggles = QtWidgets.QVBoxLayout()
         toggles.addWidget(self.check_64b)
         toggles.addWidget(self.check_flt)
-        
+
         self.check_64b.stateChanged.connect(self.on_64b_clicked)
         self.check_flt.stateChanged.connect(self.on_flt_clicked)
-        
+
         # connect input field valid result to binary view update
         self.input_field.connect(self.binary_view.set_value)
 
@@ -561,7 +544,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_layout.addWidget(self.input_field)
         self.result_layout.addLayout(toggles)
         self.result_layout.addWidget(self.binary_result)
-        
+
         self.main_layout.addLayout(self.input_layout)
         self.main_layout.addWidget(self.binary_view)
         self.main_layout.addLayout(self.result_layout)
@@ -576,11 +559,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_field.setFocus()
         self.input_field.selectAll()
 
-        # set fixed size and save the size so we can return to it if we 
+        # set fixed size and save the size so we can return to it if we
         # expand then contract
         self.contracted_size = self.central_widget.sizeHint()
         self.setFixedSize(self.contracted_size)
-        
+
     def on_64b_clicked(self, state):
         if state > 0:
             # keep current value and sign bit
@@ -622,7 +605,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if sign_bit:
                 if sign_bit < 32:
                     self.binary_view.set_sign_bit_index(sign_bit)
-                    
+
     def on_flt_clicked(self, state):
         if state > 0:
             self.check_64b.setEnabled(False)
@@ -637,18 +620,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.contracted_size = self.central_widget.sizeHint()
             self.setFixedSize(self.contracted_size)
             self.input_field.force_evaluation()
-        
-    def eventFilter(self, obj, event):
-
-        if event.type() == QtCore.QEvent.WindowDeactivate:
-            # start selection polling timer when window loses focus
-            self.timer.start()
-
-        elif event.type() == QtCore.QEvent.WindowActivate:
-            # stop selection polling timer when window gains focus
-            self.timer.stop()
-
-        return False
 
 if __name__ == "__main__":
     # boilerplate for starting Qt applications
