@@ -1,7 +1,6 @@
-from PyQt5 import QtGui, QtCore, QtWidgets, QtWidgets
-
 import struct
-
+from PyQt6 import QtGui, QtCore, QtWidgets, QtWidgets
+from math import * # for user caclulation convenience
 
 def to_float(value):
     # interpret the bits of value as IEEE 754 floating point number
@@ -54,25 +53,23 @@ class BinaryTableItem(QtWidgets.QTableWidgetItem):
         self.index = index
         self.value = False
         self.is_bit_limit = False
-
-        # mouse button down
         self.is_pressed = False
 
         self.setText(f'{self.value:b}')
         self.setFont(QtGui.QFont('monospace', 10))
-        self.setTextAlignment(QtCore.Qt.AlignCenter)
-        self.setFlags(QtCore.Qt.ItemIsEnabled)
+        self.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
 
     def notify_pressed(self):
         self.is_pressed = True
-        self._toggle()
+        self.toggle()
 
     def notify_entered_while_pressed(self):
         # bug(?): when mouse is pressed down inside a cell, notify_pressed triggers
         # and then notify_entered_while_pressed when mouse starts moving. However if
         # notify_pressed did not trigger, we are entering this cell from elsewhere.
         if not self.is_pressed:
-            self._toggle()
+            self.toggle()
 
         # this bug only happens once, so we can clear the pressed flag here.
         self.is_pressed = False
@@ -85,7 +82,7 @@ class BinaryTableItem(QtWidgets.QTableWidgetItem):
         self.is_bit_limit = not self.is_bit_limit
         self._update_color()
 
-    def _toggle(self):
+    def toggle(self):
         self.value = not self.value
         self.setText(f'{self.value:b}')
         self._update_color()
@@ -111,8 +108,10 @@ class BinaryTableLegend(QtWidgets.QTableWidgetItem):
     def __init__(self, index):
         QtWidgets.QTableWidgetItem.__init__(self)
         self.setText(f'{index}')
-        self.setTextAlignment(QtCore.Qt.AlignBottom | QtCore.Qt.AlignHCenter)
-        self.setFlags(QtCore.Qt.ItemNeverHasChildren)
+        self.setTextAlignment(
+            QtCore.Qt.AlignmentFlag.AlignBottom |
+            QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.setFlags(QtCore.Qt.ItemFlag.ItemNeverHasChildren)
         self.setFont(QtGui.QFont('monospace', 10))
 
 
@@ -123,7 +122,7 @@ class BinaryTableSpacer(QtWidgets.QTableWidgetItem):
     def __init__(self):
         QtWidgets.QTableWidgetItem.__init__(self)
         self.setText(' ')
-        self.setFlags(QtCore.Qt.ItemIsEnabled)
+        self.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
 
 
 class BinaryTableLabel(QtWidgets.QTableWidgetItem):
@@ -134,8 +133,8 @@ class BinaryTableLabel(QtWidgets.QTableWidgetItem):
     def __init__(self, label):
         QtWidgets.QTableWidgetItem.__init__(self)
         self.setText(label)
-        self.setFlags(QtCore.Qt.ItemIsEnabled)
-        self.setTextAlignment(QtCore.Qt.AlignTop)
+        self.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
+        self.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
         self.setFont(QtGui.QFont('monospace', 10))
 
 class BinaryView(QtWidgets.QTableWidget):
@@ -155,6 +154,7 @@ class BinaryView(QtWidgets.QTableWidget):
         self.mode = mode
         self.error_message = None
         self.previously_clicked_cell = None
+        self.n_cols = 32
 
         # register callback for mouse event (cell entered while mouse pressed)
         self.itemEntered.connect(self._on_item_entered)
@@ -191,7 +191,7 @@ class BinaryView(QtWidgets.QTableWidget):
 
     def set_value(self, value):
 
-        if type(value) == str:
+        if isinstance(value, str):
             # string input interpreted as error message
             self.error_message = value
             self._callback()
@@ -216,7 +216,7 @@ class BinaryView(QtWidgets.QTableWidget):
 
         # sanity check: abort if we cannot display it
         if value >= 2**self.n_bits:
-            self.error_message = f'Out of {self.n_bits} bit range'
+            self.error_message = f'\nOut of {self.n_bits} bit range'
             self._callback()
             return
         elif value < 0:
@@ -250,12 +250,12 @@ class BinaryView(QtWidgets.QTableWidget):
         if not isinstance(cell, BinaryTableItem):
             return
 
-        if event.button() == QtCore.Qt.LeftButton:
+        if event.button() == QtCore.Qt.MouseButton.LeftButton:
             # left button toggles bits on/off
-            cell._toggle()
+            cell.toggle()
             self.previously_clicked_cell = cell
             self._callback()
-        elif event.button() == QtCore.Qt.RightButton:
+        elif event.button() == QtCore.Qt.MouseButton.RightButton:
             # right button sets sign bit if we are in int mode
             if self.mode == self.MODE_INT:
                 self.previously_clicked_cell = cell
@@ -310,11 +310,14 @@ class BinaryView(QtWidgets.QTableWidget):
     def _set_visual_properties(self):
         self.horizontalHeader().setVisible(False)
         self.verticalHeader().setVisible(False)
-        self.setFocusPolicy(False)
+        self.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.setShowGrid(False)
-        self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
+        self.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setSizeAdjustPolicy(
+            QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
         self.resizeColumnsToContents()
 
     def _populate_table_float(self):
@@ -417,12 +420,12 @@ class BinaryView(QtWidgets.QTableWidget):
         # error message has been propagated, clear it
         self.error_message = None
 
-    def _twos_complement(self, onesComplement, nBits):
+    def _twos_complement(self, ones_complement, nBits):
         # helper function for calculating two's complement at arbitrary bit depth
-        if onesComplement & 1 << (nBits - 1) == 0:
-            return onesComplement
+        if ones_complement & 1 << (nBits - 1) == 0:
+            return ones_complement
         else:
-            return ((~onesComplement + 1) & ((1 << nBits) - 1)) * -1
+            return ((~ones_complement + 1) & ((1 << nBits) - 1)) * -1
 
 
 class InputLabel(QtWidgets.QLineEdit):
@@ -433,7 +436,7 @@ class InputLabel(QtWidgets.QLineEdit):
     def __init__(self):
         QtWidgets.QLineEdit.__init__(self)
         self.setFont(QtGui.QFont('monospace', 10))
-        self.setAlignment(QtCore.Qt.AlignRight)
+        self.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight)
         self.returnPressed.connect(self._on_changed)
         self.callbacks = []
 
@@ -461,9 +464,11 @@ class InputLabel(QtWidgets.QLineEdit):
             res = float(eval(self.text()))
             self._callback(res)
 
-        # int() cast will fail is result is not integer, report "syntax error"
-        except (SyntaxError, Exception):
+        # cast will fail is result is not integer, report "syntax error"
+        except SyntaxError as e:
             self._callback('\nSyntax error')
+            print(self.text())
+            print(e)
 
         self.setFocus()
         self.selectAll()
@@ -474,14 +479,17 @@ class ResultField(QtWidgets.QLabel):
     '''
     def __init__(self):
         QtWidgets.QLabel.__init__(self)
-        self.setAlignment(QtCore.Qt.AlignRight)
+        self.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight)
         self.result = ""
         self.setFont(QtGui.QFont('monospace', 10))
 
         # allow user to select text
-        self.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
-        self.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
-        self.setFrameStyle(QtWidgets.QFrame.StyledPanel)
+        self.setTextInteractionFlags(
+            QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        self.setFrameStyle(QtWidgets.QFrame.Shape.StyledPanel)
 
     def set_result(self, as_unsigned=None, as_int=None, as_flt=None, error_message=None):
 
@@ -576,8 +584,8 @@ class MainWindow(QtWidgets.QMainWindow):
             # refresh table
             self.binary_view.set_value(float(curr_val))
 
-            self.expanded_size = self.central_widget.sizeHint()
-            self.setFixedSize(self.expanded_size)
+            expanded_size = self.central_widget.sizeHint()
+            self.setFixedSize(expanded_size)
 
             # if curr_val was signed, update sign bit as well
             if sign_bit:
@@ -606,20 +614,20 @@ class MainWindow(QtWidgets.QMainWindow):
                 if sign_bit < 32:
                     self.binary_view.set_sign_bit_index(sign_bit)
 
+        self.input_field.force_evaluation()
+
     def on_flt_clicked(self, state):
         if state > 0:
             self.check_64b.setEnabled(False)
             self.binary_view.new_mode(BinaryView.MODE_FLOAT)
-            self.contracted_size = self.central_widget.sizeHint()
-            self.setFixedSize(self.contracted_size)
-            self.input_field.force_evaluation()
         else:
             self.check_64b.setEnabled(True)
             self.check_64b.setChecked(False)
             self.binary_view.new_mode(BinaryView.MODE_INT)
-            self.contracted_size = self.central_widget.sizeHint()
-            self.setFixedSize(self.contracted_size)
-            self.input_field.force_evaluation()
+
+        self.contracted_size = self.central_widget.sizeHint()
+        self.setFixedSize(self.contracted_size)
+        self.input_field.force_evaluation()
 
 if __name__ == "__main__":
     # boilerplate for starting Qt applications
@@ -627,4 +635,4 @@ if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
     main_window = MainWindow()
     main_window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
