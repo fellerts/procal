@@ -146,7 +146,7 @@ class BinaryView(QtWidgets.QTableWidget):
     MODE_FLOAT = 1
     MODE_INT = 2
 
-    def __init__(self, n_bits=32, mode=MODE_INT):
+    def __init__(self, force_float_fn, n_bits=32, mode=MODE_INT):
         QtWidgets.QTableWidget.__init__(self)
 
         self.callbacks = []
@@ -155,6 +155,7 @@ class BinaryView(QtWidgets.QTableWidget):
         self.error_message = None
         self.previously_clicked_cell = None
         self.n_cols = 32
+        self.force_float_fn = force_float_fn
 
         # register callback for mouse event (cell entered while mouse pressed)
         self.itemEntered.connect(self._on_item_entered)
@@ -198,8 +199,8 @@ class BinaryView(QtWidgets.QTableWidget):
             return
 
         if self.mode == self.MODE_INT and value.is_integer() is not True:
-            # got a float while in int mode, warn user
-            self.error_message = '\nCannot represent float in int mode'
+            # got a float while in int mode, change mode
+            self.force_float_fn()
             self._callback()
             return
 
@@ -523,17 +524,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_layout = QtWidgets.QHBoxLayout()
         self.result_layout = QtWidgets.QHBoxLayout()
 
-        # create fields
-        self.input_field = InputLabel()
-        self.binary_view = BinaryView(32, BinaryView.MODE_INT)
-        self.binary_result = ResultField()
-        reset_button = QtWidgets.QPushButton('Clear')
-
         self.check_64b = QtWidgets.QCheckBox('64 bit')
         self.check_flt = QtWidgets.QCheckBox('float')
         toggles = QtWidgets.QVBoxLayout()
         toggles.addWidget(self.check_64b)
         toggles.addWidget(self.check_flt)
+
+        # create fields
+        self.input_field = InputLabel()
+        self.binary_view = BinaryView(
+            lambda: self.check_flt.setChecked(True), 32, BinaryView.MODE_INT)
+        self.binary_result = ResultField()
+        reset_button = QtWidgets.QPushButton('Clear')
 
         self.check_64b.stateChanged.connect(self.on_64b_clicked)
         self.check_flt.stateChanged.connect(self.on_flt_clicked)
