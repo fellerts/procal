@@ -149,6 +149,7 @@ class BinaryView(QtWidgets.QTableWidget):
 
     def __init__(self, force_float_fn, n_bits=32, mode=MODE_INT):
         QtWidgets.QTableWidget.__init__(self)
+        self.setTextElideMode(QtCore.Qt.TextElideMode.ElideNone)
 
         self.callbacks = []
         self.table_elements = []
