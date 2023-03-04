@@ -1,5 +1,6 @@
 import struct
-from PyQt6 import QtGui, QtCore, QtWidgets, QtWidgets
+import qdarktheme
+from PyQt6 import QtGui, QtCore, QtWidgets
 from math import * # for user caclulation convenience
 
 def to_float(value):
@@ -59,6 +60,8 @@ class BinaryTableItem(QtWidgets.QTableWidgetItem):
         self.setFont(QtGui.QFont('monospace', 10))
         self.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
+        self.defaultBackground = self.background()
+        self.defaultForeground = self.foreground()
 
     def notify_pressed(self):
         self.is_pressed = True
@@ -90,10 +93,13 @@ class BinaryTableItem(QtWidgets.QTableWidgetItem):
     def _update_color(self):
         if self.is_bit_limit:
             self.setBackground(QtGui.QColor(200, 240, 200))
+            self.setForeground(QtGui.QColor(0, 0, 0))
         elif self.value:
             self.setBackground(QtGui.QColor(240, 200, 200))
+            self.setForeground(QtGui.QColor(0, 0, 0))
         else:
-            self.setBackground(QtGui.QColor(255, 255, 255))
+            self.setBackground(self.defaultBackground)
+            self.setForeground(self.defaultForeground)
 
     def force_to(self, value):
         self.value = value
@@ -148,6 +154,7 @@ class BinaryView(QtWidgets.QTableWidget):
 
     def __init__(self, force_float_fn, n_bits=32, mode=MODE_INT):
         QtWidgets.QTableWidget.__init__(self)
+        self.setTextElideMode(QtCore.Qt.TextElideMode.ElideNone)
 
         self.callbacks = []
         self.table_elements = []
@@ -634,7 +641,9 @@ class MainWindow(QtWidgets.QMainWindow):
 if __name__ == "__main__":
     # boilerplate for starting Qt applications
     import sys
+    qdarktheme.enable_hi_dpi()
     app = QtWidgets.QApplication(sys.argv)
+    qdarktheme.setup_theme("auto")
     main_window = MainWindow()
     main_window.show()
     sys.exit(app.exec())
