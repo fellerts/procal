@@ -43,6 +43,15 @@ def to_float(value):
 
     return literal, string
 
+def monospace():
+    # Returns a suitable QFont that looks ok on all platforms
+    from sys import platform
+    if platform == "darwin":
+        font = QtGui.QFont('Monaco')
+    else:
+        font = QtGui.QFont('monospace')
+    font.setStyleHint(QtGui.QFont.StyleHint.Monospace)
+    return font
 
 class BinaryTableItem(QtWidgets.QTableWidgetItem):
     '''
@@ -56,8 +65,7 @@ class BinaryTableItem(QtWidgets.QTableWidgetItem):
         self.is_bit_limit = False
         self.is_pressed = False
 
-        self.setText(f'{self.value:b}')
-        self.setFont(QtGui.QFont('monospace', 10))
+        self.setFont(monospace())
         self.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
         self.defaultBackground = self.background()
@@ -118,7 +126,7 @@ class BinaryTableLegend(QtWidgets.QTableWidgetItem):
             QtCore.Qt.AlignmentFlag.AlignBottom |
             QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.setFlags(QtCore.Qt.ItemFlag.ItemNeverHasChildren)
-        self.setFont(QtGui.QFont('monospace', 10))
+        self.setFont(monospace())
 
 
 class BinaryTableSpacer(QtWidgets.QTableWidgetItem):
@@ -141,7 +149,7 @@ class BinaryTableLabel(QtWidgets.QTableWidgetItem):
         self.setText(label)
         self.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
         self.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-        self.setFont(QtGui.QFont('monospace', 10))
+        self.setFont(monospace())
 
 class BinaryView(QtWidgets.QTableWidget):
     '''
@@ -443,7 +451,7 @@ class InputLabel(QtWidgets.QLineEdit):
     '''
     def __init__(self):
         QtWidgets.QLineEdit.__init__(self)
-        self.setFont(QtGui.QFont('monospace', 10))
+        self.setFont(monospace())
         self.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight)
         self.returnPressed.connect(self._on_changed)
         self.callbacks = []
@@ -489,7 +497,7 @@ class ResultField(QtWidgets.QLabel):
         QtWidgets.QLabel.__init__(self)
         self.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight)
         self.result = ""
-        self.setFont(QtGui.QFont('monospace', 10))
+        self.setFont(monospace())
 
         # allow user to select text
         self.setTextInteractionFlags(
