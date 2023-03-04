@@ -1,5 +1,6 @@
 import struct
-from PyQt6 import QtGui, QtCore, QtWidgets, QtWidgets
+import qdarktheme
+from PyQt6 import QtGui, QtCore, QtWidgets
 from math import * # for user caclulation convenience
 
 def to_float(value):
@@ -634,7 +635,9 @@ class MainWindow(QtWidgets.QMainWindow):
 if __name__ == "__main__":
     # boilerplate for starting Qt applications
     import sys
+    qdarktheme.enable_hi_dpi()
     app = QtWidgets.QApplication(sys.argv)
+    qdarktheme.setup_theme("auto")
     main_window = MainWindow()
     main_window.show()
     sys.exit(app.exec())
