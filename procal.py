@@ -60,6 +60,8 @@ class BinaryTableItem(QtWidgets.QTableWidgetItem):
         self.setFont(QtGui.QFont('monospace', 10))
         self.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled)
+        self.defaultBackground = self.background()
+        self.defaultForeground = self.foreground()
 
     def notify_pressed(self):
         self.is_pressed = True
@@ -91,10 +93,13 @@ class BinaryTableItem(QtWidgets.QTableWidgetItem):
     def _update_color(self):
         if self.is_bit_limit:
             self.setBackground(QtGui.QColor(200, 240, 200))
+            self.setForeground(QtGui.QColor(0, 0, 0))
         elif self.value:
             self.setBackground(QtGui.QColor(240, 200, 200))
+            self.setForeground(QtGui.QColor(0, 0, 0))
         else:
-            self.setBackground(QtGui.QColor(255, 255, 255))
+            self.setBackground(self.defaultBackground)
+            self.setForeground(self.defaultForeground)
 
     def force_to(self, value):
         self.value = value
