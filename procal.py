@@ -465,8 +465,8 @@ class InputLabel(QtWidgets.QLineEdit):
             res = float(eval(self.text()))
             self._callback(res)
 
-        # cast will fail is result is not integer, report "syntax error"
-        except SyntaxError as e:
+        except:
+            # treat all exceptions as syntax error
             self._callback('\nSyntax error')
             print(self.text())
             print(e)
