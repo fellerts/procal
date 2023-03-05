@@ -1,7 +1,7 @@
 import struct
 import qdarktheme
 from PyQt6 import QtGui, QtCore, QtWidgets
-from math import * # for user caclulation convenience
+from math import * # for user calculation convenience
 
 def to_float(value):
     # interpret the bits of value as IEEE 754 floating point number
@@ -176,12 +176,12 @@ class BinaryView(QtWidgets.QTableWidget):
         self.itemEntered.connect(self._on_item_entered)
         self.set_new_bit_width(n_bits)
 
-    def new_mode(self, mode):
+    def new_mode(self, mode, check_64b_checked):
         if mode == self.mode:
             return
 
         self.mode = mode
-        self.set_new_bit_width(32)
+        self.set_new_bit_width(64 if check_64b_checked else 32)
 
     def get_value(self):
         # Returns an interpretation of the binary number present in the view
@@ -584,10 +584,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_field.setFocus()
         self.input_field.selectAll()
 
-        # set fixed size and save the size so we can return to it if we
-        # expand then contract
-        self.contracted_size = self.central_widget.sizeHint()
-        self.setFixedSize(self.contracted_size)
+        # set fixed size
+        self.setFixedSize(self.central_widget.sizeHint())
 
     def on_64b_clicked(self, state):
         if state > 0:
@@ -600,9 +598,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
             # refresh table
             self.binary_view.set_value(float(curr_val))
-
-            expanded_size = self.central_widget.sizeHint()
-            self.setFixedSize(expanded_size)
 
             # if curr_val was signed, update sign bit as well
             if sign_bit:
@@ -621,8 +616,6 @@ class MainWindow(QtWidgets.QMainWindow):
             # resize the table
             self.binary_view.set_new_bit_width(32)
 
-            self.setFixedSize(self.contracted_size)
-
             # refresh table with the old value sans 32 MSB
             self.binary_view.set_value(float(new_val))
 
@@ -631,19 +624,21 @@ class MainWindow(QtWidgets.QMainWindow):
                 if sign_bit < 32:
                     self.binary_view.set_sign_bit_index(sign_bit)
 
+        new_size = self.central_widget.sizeHint()
+        self.setFixedSize(new_size)
+
         self.input_field.force_evaluation()
 
     def on_flt_clicked(self, state):
         if state > 0:
             self.check_64b.setEnabled(False)
-            self.binary_view.new_mode(BinaryView.MODE_FLOAT)
+            self.binary_view.new_mode(BinaryView.MODE_FLOAT, self.check_64b.isChecked())
         else:
             self.check_64b.setEnabled(True)
-            self.check_64b.setChecked(False)
-            self.binary_view.new_mode(BinaryView.MODE_INT)
+            self.binary_view.new_mode(BinaryView.MODE_INT, self.check_64b.isChecked())
 
-        self.contracted_size = self.central_widget.sizeHint()
-        self.setFixedSize(self.contracted_size)
+        new_size = self.central_widget.sizeHint()
+        self.setFixedSize(new_size)
         self.input_field.force_evaluation()
 
 if __name__ == "__main__":
