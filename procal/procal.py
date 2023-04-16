@@ -641,7 +641,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setFixedSize(new_size)
         self.input_field.force_evaluation()
 
-if __name__ == "__main__":
+def main():
     # boilerplate for starting Qt applications
     import sys
     qdarktheme.enable_hi_dpi()
@@ -650,3 +650,6 @@ if __name__ == "__main__":
     main_window = MainWindow()
     main_window.show()
     sys.exit(app.exec())
+
+if __name__ == "__main__":
+    main()

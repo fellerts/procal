@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "procal"
+authors = [
+    {name = "fellerts"},
+]
+description="A simple Qt-based programming calculator"
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "GPLv3"}
+dependencies = [
+	'PyQt6==6.2.3',
+	'PyQt6-Qt6==6.2.4',
+	'PyQt6-sip==13.2.1',
+	'pyqtdarktheme==2.1.0',
+]
+dynamic = ["version"]
+
+[project.scripts]
+procal = "procal.procal:main"
+
+[tool.setuptools]
+packages=["procal"]
