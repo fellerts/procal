@@ -1,0 +1,71 @@
+name: Build and release binaries (x86_64)
+
+on:
+  push:
+    tags:
+      - "v*"
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        # os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Get latest tag
+        id: latest_tag
+        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Setup Python and install dependencies
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          architecture: "x64"
+          cache: "pip"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Build binaries
+        uses: Nuitka/Nuitka-Action@main
+        with:
+          script-name: procal/procal.py
+          onefile: true
+          enable-plugins: pyqt6
+          disable-console: true
+
+      - name: Pack binaries
+        run: |
+          cd build
+          if [ "$RUNNER_OS" == "Linux" ]; then
+               tar -czvf procal-x86_64-linux.tar.gz *.bin
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+               powershell -c "Compress-Archive -Path *.exe -Destination procal-x86_64-windows.zip"
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+               tar -czvf procal-x86_64-apple.tar.gz *.app
+          else
+               echo "$RUNNER_OS not supported"
+               exit 1
+          fi
+        shell: bash
+
+      - name: Release binaries
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.latest_tag.outputs.tag }}
+          files: |
+            build/*.tar.gz
+            build/*.zip
