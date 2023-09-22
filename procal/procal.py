@@ -213,7 +213,7 @@ class BinaryView(QtWidgets.QTableWidget):
             self._callback()
             return
 
-        if self.mode == self.MODE_INT and value.is_integer() is not True:
+        if self.mode == self.MODE_INT and isinstance(value, float):
             # got a float while in int mode, change mode
             self.force_float_fn()
             self._callback()
@@ -461,7 +461,7 @@ class InputLabel(QtWidgets.QLineEdit):
 
     def reset(self):
         self.setText('0')
-        self._callback(0.0)
+        self._callback(0)
 
     def force_evaluation(self):
         self._on_changed()
@@ -477,10 +477,12 @@ class InputLabel(QtWidgets.QLineEdit):
     def _on_changed(self):
 
         try:
-            res = float(eval(self.text()))
-            self._callback(res)
-
-        except:
+            res = eval(self.text())
+            if (isinstance(res, int) or isinstance(res, float)):
+                self._callback(res)
+            else:
+                raise TypeError("Input must evaluate to a number") 
+        except Exception as e:
             # treat all exceptions as syntax error
             self._callback('\nSyntax error')
             print(self.text())
@@ -597,7 +599,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.binary_view.set_new_bit_width(64)
 
             # refresh table
-            self.binary_view.set_value(float(curr_val))
+            self.binary_view.set_value(curr_val)
 
             # if curr_val was signed, update sign bit as well
             if sign_bit:
@@ -617,7 +619,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.binary_view.set_new_bit_width(32)
 
             # refresh table with the old value sans 32 MSB
-            self.binary_view.set_value(float(new_val))
+            self.binary_view.set_value(new_val)
 
             # if curr_val was signed, update sign bit as well
             if sign_bit:
